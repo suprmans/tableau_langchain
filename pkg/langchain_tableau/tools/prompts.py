@@ -1069,112 +1069,102 @@ vds_prompt_data = {
 vds_query = """
 Task:
 Your job is to write the main body of a request to the Tableau VizQL Data Service (VDS) API to
-obtain data that answers the task given to you by the user:
+obtain data that answers the user's task.
 
 User Task: {task}
 
+---
+
 Data Dictionary:
-Use this to map the user's natural language questions to the fields of data available in the data source and
-to be aware of any additional operations that may be needed to conceptualize the data correctly according to business
-semantics or other logic such as applying filters, aggregations, dates, etc.
-
-CRITICAL RULE: The data_dictionary provides the programmatic `Column` name (e.g., `INCOME_Y`) and its `Description`.
-When you write the final JSON query, you MUST use the programmatic `Column` name from the data dictionary
-as the value for the `fieldCaption` key.
-
-EXAMPLE:
-- The data_dictionary has: "Column: INCOME_Y, Description: รายได้เฉลี่ยของคนในครัวเรือนต่อปี"
-- Your JSON output MUST be: {{ "fieldCaption": "INCOME_Y" }}
-- DO NOT use the Thai description or a made-up name like "_IncomePerYear".
+Use this to map the user's natural language questions to the available data fields. Be aware of any additional operations (filters, aggregations, dates) needed to correctly conceptualize the data according to business semantics or other logic.
 
 {data_dictionary}
 
+---
+
 Data Model:
-Provides sample values for fields in the data source. This is useful in particular when aggregating or inferring
-filter values
+Provides sample values for fields in the data source. This is useful for aggregation and inferring filter values.
 
 {data_model}
 
+---
+
 VDS Schema:
-OpenAPI schema describing JSON payloads to the VDS API, use this to generate queries with correct syntax
+This OpenAPI schema describes the JSON payloads for the VDS API. Use it to generate queries with correct syntax.
 
 {vds_schema}
 
-Query:
-The query must be written according to the `vds_schema.Query` key. Which describes two properties: fields (required)
-and filters (optional)
+---
 
-Fields:
-To satisfy the required "fields" property of `vds_schema.Query`, add fields according to the `vds_schema.Field` key,
-which references `vds_schema.FieldBase`. Use the `data_dictionary` and `data_model` keys to query all useful or related
-fields, including those not directly related to the topics mentioned by the user. Even if additional transformations or
-calculations are needed, the additional fields may be useful. DO NOT HALLUCINATE FIELD NAMES
+Query Construction Guidelines:
 
-Aggregations:
-Aggregations are a property of `vds_schema.Field` called "functions" and are described in `vds_schema.Functions`.
-For INTEGER or REAL fields, you must always aggregate it with one of these: SUM, AVG, MEDIAN, COUNT, COUNTD, MIN or MAX.
-For DATETIME or DATE fields, you must always aggregate it with one of these: YEAR, QUARTER, MONTH, WEEK, DAY, TRUNC_YEAR,
-TRUNC_QUARTER, TRUNC_MONTH, TRUNC_WEEK or TRUNC_DAY. If you get an error from VDS that the response size is too large,
-try further aggregating or filtering the data to avoid row-level results that are too granular and not insightful.
+1.  **Main Query Structure:**
+    * The query must be written strictly according to the `vds_schema.Query` key.
+    * It requires a "fields" property and may optionally include "filters".
 
-Sorting:
-Sort fields as often as possible to highlight data of interest in the query even if not explicitly stated by the user. That
-means that if they asked about a field in particular, find a way to sort it that makes sense. Sorting is composed of two
-properties applied to `vds_schema.Field`: "sortDirection" described by `vds_schema.SortDirection` and "SortPriority" which
-is sets the sort order for fields in the query. "SortPriority" is only needed for fields you wish to sort. DO NOT apply
-sorting to the entire query or payload, this applies only to fields
+2.  **Fields (Required):**
+    * Add fields according to the `vds_schema.Field` key, which references `vds_schema.FieldBase`.
+    * Consult the `data_dictionary` and `data_model` to identify all useful or related fields, even if not directly mentioned by the user.
+    * **Crucial:** DO NOT HALLUCINATE FIELD NAMES. Use only names identified in the Data Dictionary or Schema.
 
-Filtering:
-Add filters to narrow down the data set according to user specifications and to avoid unnecessary large volumes of data.
-Filters are the second and optional property of `vds_schema.Query` and should be written according to `vds_schema.Filter`.
-The `vds_schema.Filter` spec references `vds_schema.FilterField`. When asked about values for a specific date, use
-QuantitativeDateFilter with RANGE and always include both minDate and maxDate properties. When asked about last week,
-previous month, current year, this quarter, previous 10 years, last 2 quarters use `RelativeDateFilter`
+3.  **Aggregations (Functions):**
+    * Aggregations are specified using the "function" property of `vds_schema.Field`, as described in `vds_schema.Function`.
+    * For `INTEGER` or `REAL` data types, you **must** always aggregate using one of: `SUM`, `AVG`, `MEDIAN`, `COUNT`, `COUNTD`, `MIN`, or `MAX`.
+    * For `DATETIME` or `DATE` data types, you **must** always aggregate using one of: `YEAR`, `QUARTER`, `MONTH`, `WEEK`, `DAY`, `TRUNC_YEAR`, `TRUNC_QUARTER`, `TRUNC_MONTH`, `TRUNC_WEEK`, or `TRUNC_DAY`.
+    * If a VDS error indicates the response size is too large, try further aggregating or filtering to avoid overly granular, uninsightful row-level results.
 
-There are many types of filters. To choose the right kind of filters you must first use the `data_model` key to map the
-target field to the kind of filters it supports. Use the "dataType" for each field (ex. "dataType": "STRING") and the
-following list of filter types to make this determination:
+4.  **Sorting:**
+    * Sort fields whenever possible to highlight data of interest, even if not explicitly requested by the user. If a field is specifically mentioned, find a sensible way to sort it.
+    * Sorting uses two properties on `vds_schema.Field`: "sortDirection" (from `vds_schema.SortDirection`) and "sortPriority" (an integer setting the order).
+    * "sortPriority" is only required for fields you intend to sort.
+    * **Warning:** DO NOT apply sorting to the entire query or payload; these properties apply only to individual fields.
 
-- MatchFilter (defined at `vds_schema.MatchFilter`):
-- QuantitativeFilterBase (defined at `vds_schema.QuantitativeFilterBase`):
-- QuantitativeNumericalFilter (defined at `vds_schema.QuantitativeNumericalFilter`):
-- QuantitativeDateFilter (defined at `vds_schema.QuantitativeDateFilter`): Always include minDate and maxDate properties for
-specific dates
-- SetFilter (defined at `vds_schema.SetFilter`):
-- RelativeDateFilter (defined at `vds_schema.RelativeDateFilter`): Ideal for relative dates such as last week, previous month,
-current year, this quarter, previous 10 years, last 2 quarters
-- TopNFilter (defined at `vds_schema.TopNFilter`): Use this filter when the user asked a Top 10 or Top N question so that
-you filter the data response to analyze
+5.  **Filtering (Optional):**
+    * Add filters to narrow down the dataset according to user specifications and to avoid large data volumes.
+    * Filters are the "filters" property of `vds_schema.Query` and must conform to `vds_schema.Filter`.
+    * The `vds_schema.Filter` specification references `vds_schema.FilterField`.
+    * When filtering for specific dates, use `QuantitativeDateFilter` with `RANGE`, always including both `minDate` and `maxDate` properties.
+    * For relative dates (e.g., "last week," "previous month," "current year," "last 2 quarters"), use `RelativeDateFilter`.
+    * To select the appropriate filter type, use the "dataType" from the `data_model` (e.g., `"dataType": "STRING"`) and reference the following filter types:
+        * `MatchFilter` (for string matching: `contains`, `startsWith`, `endsWith`)
+        * `QuantitativeFilterBase` (general numerical/date quantitative filters)
+        * `QuantitativeNumericalFilter` (for numerical ranges: `min`, `max`)
+        * `QuantitativeDateFilter` (for date ranges: `minDate`, `maxDate`; always include `minDate` and `maxDate` for specific dates)
+        * `SetFilter` (for specific sets of values)
+        * `RelativeDateFilter` (ideal for relative dates like "last N," "current," "next")
+        * `TopNFilter` (use when the user asks for "Top N" or "Bottom N")
+    * You may not have all filter members for "STRING" fields in the Data Model; generate educated guesses for actual filter values and use previous empty array errors to retry with better values.
 
-You may not have all filter members for fields of type "STRING" in the Data Model, only sample values. Therefore, you must
-generate educated guesses for actual filter values and use any previous empty array errors to retry with better values
+---
 
-Sample Queries:
-Reference these examples as best practices to execute tasks. These examples show distinct ways to interact with the VDS API
-in order to obtain data in different shapes.
+**Sample Queries:**
+Reference these examples as best practices for executing tasks and to see how to obtain data in different shapes.
 
 {sample_queries}
 
-Error Queries:
-These examples demonstrate common errors you have generated in the past, avoid these scenarios by using correct syntax instead
+---
+
+**Error Queries:**
+These examples demonstrate common errors you have generated in the past. Avoid these scenarios by using correct syntax instead.
 
 {error_queries}
 
-Previous Tool Call Errors:
-If this section has data, then the previous attempt resulted in an error described here:
+---
+
+**Previous Tool Call Errors (for self-correction):**
+If this section contains data, the previous attempt resulted in an error described here:
 
 {previous_call_error}
 
-If the array was empty without syntax errors this indicates that a filter was applied with an incorrect value
-
-The query you generated that caused the error is this:
+If the error was an empty array without syntax errors, this usually indicates an incorrect filter value was applied, returning no data. The query you generated that caused the error was:
 
 {previous_vds_payload}
 
-Output:
-Your output must be minimal, containing only the VDS query in JSON format without any extra formatting for readability.
-If the data source does not contain fields of data that can answer the user_input, return a message so the agent knows to
-use a different tool
+---
+
+**Output:**
+Your output must be minimal, containing **only the VDS query in JSON format**, without any extra formatting or conversational text.
+If the data source does not contain fields that can answer the user's input, return a message so the agent knows to use a different tool.
 """
 
 vds_response = """

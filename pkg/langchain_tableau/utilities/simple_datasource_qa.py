@@ -11,7 +11,22 @@ from langchain_tableau.utilities.metadata import get_data_dictionary
 
 
 def get_headlessbi_data(payload: str, url: str, api_key: str, datasource_luid: str):
-    json_payload = json.loads(payload)
+
+    # print("Running function get_headlessbi_data ...")
+    # 🛠️ Sanitize payload: remove markdown fences if they exist
+    cleaned_payload = payload.strip()
+    if cleaned_payload.startswith("```json") or cleaned_payload.startswith("```"):
+        cleaned_payload = "\n".join(line for line in cleaned_payload.splitlines() if not line.strip().startswith("```"))
+
+    try:
+        json_payload = json.loads(cleaned_payload)
+    except json.JSONDecodeError as je:
+        logging.error(f"JSON decoding error in get_headlessbi_data: {str(je)}")
+        raise ValueError("Invalid JSON format in the payload")
+
+    # print("-"*50)
+    # print("json_payload: ", json_payload)
+    # print("-"*50)
 
     try:
         headlessbi_data = query_vds(
@@ -113,19 +128,11 @@ def augment_datasource_metadata(
         datasource_luid=datasource_luid
     )
 
-    # insert data dictionary from Tableau's Data Catalog (using new 'fields' key)
-    prompt['data_dictionary'] = data_dictionary['fields']
-
+    # insert data dictionary from Tableau's Data Catalog
+    prompt['data_dictionary'] = data_dictionary['datasource_fields']
     # insert data source name, description and owner into 'meta' key
-    # (preserve the rich metadata structure without deleting fields)
-    prompt['meta'] = {
-        'datasource_name': data_dictionary['datasource_name'],
-        'datasource_description': data_dictionary['datasource_description'],
-        'datasource_owner': data_dictionary['datasource_owner'],
-        'datasource_luid': data_dictionary['datasource_luid'],
-        'field_count': data_dictionary['field_count'],
-        'field_names': data_dictionary['field_names']
-    }
+    del data_dictionary['datasource_fields']
+    prompt['meta'] = data_dictionary
 
     #  get sample values for fields from VDS metadata endpoint
     datasource_metadata = query_vds_metadata(
