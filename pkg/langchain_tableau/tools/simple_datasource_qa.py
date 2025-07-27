@@ -196,6 +196,24 @@ def initialize_simple_datasource_qa(
         # 3. Query data from Tableau's VizQL Data Service using the AI written payload
         def get_data(vds_query):
             payload = vds_query.content
+
+            # print("-"*50)
+            # print("vds_query: ", vds_query)
+            # print("payload: ", payload)
+            # print("-"*50)
+
+            # data = get_headlessbi_data(
+            #     api_key = tableau_auth,
+            #     url = domain,
+            #     datasource_luid = tableau_datasource,
+            #     payload = payload
+            # )
+
+            # return {
+            #     "vds_query": payload,
+            #     "data_table": data,
+            # }
+
             try:
                 data = get_headlessbi_data(
                     api_key = tableau_auth,

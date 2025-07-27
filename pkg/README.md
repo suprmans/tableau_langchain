@@ -1,7 +1,9 @@
-# langchain-tableau
+# langchain-tableau v0.4.39.1
 
-[![PyPI version](https://badge.fury.io/py/langchain-tableau.svg)](https://badge.fury.io/py/langchain-tableau)
-[![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/Tab-SE/tableau_langchain)
+<!-- [![PyPI version](https://badge.fury.io/py/langchain-tableau.svg)](https://badge.fury.io/py/langchain-tableau)
+[![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/Tab-SE/tableau_langchain) -->
+
+This package is mod
 
 This package provides Langchain integrations for Tableau, enabling you to build Agentic tools using Tableau's capabilities within the [Langchain](https://www.langchain.com/) and [LangGraph](https://langchain-ai.github.io/langgraph/tutorials/introduction/) frameworks.
 
@@ -18,60 +20,102 @@ pip install langchain-tableau
 ## Quick Start
 Here's a basic example of using the `simple_datasource_qa` tool to query a Tableau Published Datasource with a Langgraph agent:
 
+Define the environment `.env`:
+```.env
+OPENAI_COMPATIBLE_BASE_URL=
+OPENAI_COMPATIBLE_MODEL=
+
+TABLEAU_DOMAIN=
+TABLEAU_SITE=
+TABLEAU_JWT_CLIENT_ID=
+TABLEAU_JWT_SECRET_ID=
+TABLEAU_JWT_SECRET=
+TABLEAU_API_VERSION=
+TABLEAU_USER=
+DATASOURCE_LUID=
+```
+
+Python sample:
 ```python
 # --- Core Langchain/LangGraph Imports ---
+from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
-# --- langchain-tableau Imports ---
 from langchain_tableau.tools.simple_datasource_qa import initialize_simple_datasource_qa
 
-# 1. Initialize your preferred LLM
-llm = ChatOpenAI(model='gpt-4o-mini', temperature=0) # Example using OpenAI
+import os
+from dotenv import load_dotenv
 
-# 2. Initialize the Tableau Datasource Query tool
-# Replace placeholders with your Tableau environment details
-analyze_datasource = initialize_simple_datasource_qa(
-    domain='[https://your-tableau-cloud-or-server.com](https://your-tableau-cloud-or-server.com)',
-    site='YourTableauSiteName', # The site content URL, not the display name
-    jwt_client_id='YOUR_CONNECTED_APP_CLIENT_ID',
-    jwt_secret_id='YOUR_CONNECTED_APP_SECRET_ID',
-    jwt_secret='YOUR_CONNECTED_APP_SECRET_VALUE',
-    tableau_api_version='3.22', # Or your target REST API version
-    tableau_user='user@example.com', # User context for the query
-    datasource_luid='YOUR_DATASOURCE_LUID', # LUID of the Published Datasource
-    tooling_llm_model='gpt-4o-mini' # LLM used internally by the tool
+# 1. Import the parameters
+load_dotenv(override=True)
+
+TABLEAU_SERVER = os.getenv('TABLEAU_DOMAIN')
+TABLEAU_SITE = os.getenv('TABLEAU_SITE')
+TABLEAU_JWT_CLIENT_ID = os.getenv('TABLEAU_JWT_CLIENT_ID')
+TABLEAU_JWT_SECRET_ID = os.getenv('TABLEAU_JWT_SECRET_ID')
+TABLEAU_JWT_SECRET = os.getenv('TABLEAU_JWT_SECRET')
+TABLEAU_API_VERSION = os.getenv('TABLEAU_API_VERSION')
+TABLEAU_USER = os.getenv('TABLEAU_USER')
+DATASOURCE_LUID = os.getenv('DATASOURCE_LUID')
+
+OPENAI_COMPATIBLE_BASE_URL=os.getenv('OPENAI_COMPATIBLE_BASE_URL')
+OPENAI_COMPATIBLE_MODEL=os.getenv('OPENAI_COMPATIBLE_MODEL')
+
+# 2. Initialize your preferred LLM
+llm = ChatOpenAI(
+    base_url=OPENAI_COMPATIBLE_BASE_URL,
+    model=OPENAI_COMPATIBLE_MODEL,
+    api_key="dummy",
+    temperature=0
 )
 
-# 3. Create a list of tools for your agent
+# 3. Initialize the Tableau Datasource Query tool
+analyze_datasource = initialize_simple_datasource_qa(
+    domain=TABLEAU_SERVER,
+    site=TABLEAU_SITE,
+    jwt_client_id=TABLEAU_JWT_CLIENT_ID,
+    jwt_secret_id=TABLEAU_JWT_SECRET_ID,
+    jwt_secret=TABLEAU_JWT_SECRET,
+    tableau_api_version=TABLEAU_API_VERSION,
+    tableau_user=TABLEAU_USER,
+    datasource_luid=DATASOURCE_LUID,
+    tooling_llm_model=OPENAI_COMPATIBLE_BASE_URL ## Not the model just be string the source will call it!
+)
+
+# 4. Create a list of tools for your agent
 tools = [ analyze_datasource ]
 
-# 4. Build the Agent
-# This example uses a prebuilt ReAct agent from LangGraph
-tableauAgent = create_react_agent(llm, tools)
+# 5. Define system prompt (optional)
+identity = """<Define your identity of AI>"""
+system_prompt = f"""{identity} and define the instruction to use tool name: {analyze_datasource.name}"""
 
-# 5. Run the Agent with a question
+# 6. Build the Agent
+# This example uses a prebuilt ReAct agent from LangGraph
+tableau_agent = create_react_agent(
+    model=llm, 
+    tools=tools, 
+    prompt=system_prompt
+)
+
+# 7. Define view for invoke message
+def print_stream(stream):
+    for s in stream:
+        message = s["messages"][-1]
+        if isinstance(message, tuple):
+            print(message)
+        else:
+            message.pretty_print()
+
+# 8. Run the Agent with a question
 question = 'Which states sell the most? Are those the same states with the most profits?'
-messages = tableauAgent.invoke({"messages": [("human", question)]})
+messages = {"messages": [("user", your_prompt)]}
+history = print_stream(tableau_agent.stream(messages, stream_mode="values"))
 
 # Process and display the agent's response
-print(messages['messages'][-1].content)
+print(history)
+
 ```
 
-## Available Tools
-
-This package currently offers the following production-ready tools:
-
-1.  **`simple_datasource_qa`**:
-    * Allows users to query a Tableau Published Datasource using natural language.
-    * Leverages the analytical power of Tableau's VizQL Data Service engine for aggregation, filtering (and soon, calculations!).
-    * Ensures security by interacting via Tableau's API layer, preventing direct SQL injection risks. Authentication is handled via Tableau Connected Apps (JWT).
-
-## Learn More & Contribute
-
-* **Full Documentation & Examples:** For detailed usage, advanced examples (including Jupyter Notebooks), contribution guidelines, and information about the experimental sandbox where new features are developed, please visit our [**GitHub Repository**](https://github.com/Tab-SE/tableau_langchain).
-* **Live Demos:** See agents using Tableau in action at [EmbedTableau.com](https://www.embedtableau.com/) ([GitHub](https://github.com/Tab-SE/embedding_playbook)).
-
-We welcome contributions! Whether it's improving existing tools, adding new ones, or enhancing documentation, please check out the [Contribution Guidelines](https://github.com/Tab-SE/tableau_langchain/blob/main/.github/CONTRIBUTING.md) on GitHub.
-
-Let's increase the flow of data and help people get answers!
+## Prompt
+This `langchain-tableau` package is a sample to demonstrate proof-of-concept LLM integration. The prompt logic (`pkg/langchain_tableau/tools/prompts.py`) is currently hard-coded and will need to be modified to fit your specific data environment.

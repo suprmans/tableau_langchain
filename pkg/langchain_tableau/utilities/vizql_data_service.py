@@ -9,6 +9,9 @@ def query_vds(api_key: str, datasource_luid: str, url: str, query: Dict[str, Any
         "datasource": {
             "datasourceLuid": datasource_luid
         },
+        "options": {
+            "returnFormat": "OBJECTS"
+        },
         "query": query
     }
 
